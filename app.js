@@ -1,7 +1,7 @@
 'use strict';
 
 // ── App version ───────────────────────────────────────
-const VERSION    = '1.1.5';
+const VERSION    = '1.1.6';
 
 // ── Pyodide CDN version ───────────────────────────────
 const PYODIDE_VER = '0.26.4';
@@ -321,9 +321,8 @@ function setupCanvas() {
     }
   });
 
-  // Ctrl+wheel → zoom（最大32倍）
+  // ホイール → zoom（最大32倍）Ctrl不要
   mainCanvas.addEventListener('wheel', e => {
-    if (!e.ctrlKey) return;
     zoom = Math.max(0.25, Math.min(32.0, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
     render(); e.preventDefault();
   }, { passive: false });
@@ -625,7 +624,7 @@ async function initApp() {
   setupDragDrop();
   updateColorUI();
   newCanvas(32);
-  setStatus('準備完了  |  Ctrl+ホイール:ズーム  |  中クリックドラッグ:パン  |  Ctrl+クリック:スポイト');
+  setStatus('準備完了  |  ホイール:ズーム  |  中クリックドラッグ:パン  |  Ctrl+クリック:スポイト');
 }
 
 initApp().catch(err => {
