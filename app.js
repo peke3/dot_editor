@@ -413,8 +413,7 @@ function setupUI() {
   $('tool-eraser').onclick     = () => selectTool('eraser');
   $('tool-eyedropper').onclick = () => selectTool('eyedropper');
 
-  // Color picker
-  $('color-btn').onclick = () => $('color-input').click();
+  // Color picker（inputがbtn上に重なっているのでクリック不要）
   $('color-input').addEventListener('input', e => {
     const hex = e.target.value;
     drawColor.r = parseInt(hex.slice(1, 3), 16);
