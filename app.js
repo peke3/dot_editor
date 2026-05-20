@@ -1,0 +1,423 @@
+'use strict';
+
+// ── Pyodide CDN version ───────────────────────────────
+const PYODIDE_VER = '0.26.4';
+
+// ── Supported image extensions ────────────────────────
+const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp']);
+
+// ── App state ─────────────────────────────────────────
+let py       = null;
+let cw = 32, ch = 32;        // canvas logical size
+let zoom     = 1.0;
+let panX = 0, panY = 0;
+let activeTool = 'pen';       // pen | eraser | eyedropper
+let drawColor  = { r: 0, g: 0, b: 0, a: 255 };
+let showGrid   = true;
+let drawing    = false;
+let panning    = false;
+let panStart   = { x: 0, y: 0 };
+let lastDot    = null;
+let dirty      = false;       // current stroke changed canvas?
+let pendingFile = null;        // file waiting for size dialog
+
+// ── DOM helpers ───────────────────────────────────────
+const $  = id => document.getElementById(id);
+const mainCanvas = $('main-canvas');
+const ctx        = mainCanvas.getContext('2d');
+
+// Offscreen canvas: holds the raw logical pixels (e.g. 32×32)
+const offscreen = document.createElement('canvas');
+const offCtx    = offscreen.getContext('2d');
+
+// Cached checker pattern
+let checkerPat = null;
+
+// ── Geometry helpers ──────────────────────────────────
+function pixelSize() {
+  const area = $('canvas-area');
+  const base = Math.floor(Math.min(
+    area.clientWidth  / cw,
+    area.clientHeight / ch
+  ));
+  return Math.max(4, Math.floor(base * zoom));
+}
+
+function canvasOffset() {
+  const ps = pixelSize();
+  return {
+    ox: Math.floor((mainCanvas.width  - ps * cw) / 2) + panX,
+    oy: Math.floor((mainCanvas.height - ps * ch) / 2) + panY,
+    ps,
+  };
+}
+
+function toLogical(wx, wy) {
+  const { ox, oy, ps } = canvasOffset();
+  return { x: Math.floor((wx - ox) / ps), y: Math.floor((wy - oy) / ps) };
+}
+
+function inBounds(x, y) { return x >= 0 && x < cw && y >= 0 && y < ch; }
+
+// ── Checker pattern ───────────────────────────────────
+function makeChecker(cell) {
+  const sz  = cell * 2;
+  const pat = document.createElement('canvas');
+  pat.width = pat.height = sz;
+  const pc  = pat.getContext('2d');
+  pc.fillStyle = '#c8c8c8'; pc.fillRect(0, 0, sz, sz);
+  pc.fillStyle = '#a0a0a0';
+  pc.fillRect(0, 0, cell, cell);
+  pc.fillRect(cell, cell, cell, cell);
+  return ctx.createPattern(pat, 'repeat');
+}
+
+// ── Render ────────────────────────────────────────────
+function render() {
+  if (!py) return;
+
+  // Get flat RGBA bytes from Python
+  const raw   = py.runPython('get_flat()');
+  const bytes  = (raw instanceof Uint8Array) ? raw : new Uint8Array(raw.toJs());
+
+  // Paint into offscreen canvas
+  offscreen.width  = cw;
+  offscreen.height = ch;
+  const imgData = offCtx.createImageData(cw, ch);
+  imgData.data.set(bytes);
+  offCtx.putImageData(imgData, 0, 0);
+
+  // Clear main canvas
+  ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+
+  const { ox, oy, ps } = canvasOffset();
+  const dw = ps * cw, dh = ps * ch;
+
+  // Checker background
+  if (!checkerPat) checkerPat = makeChecker(8);
+  ctx.fillStyle = checkerPat;
+  ctx.fillRect(ox, oy, dw, dh);
+
+  // Scale pixel data (nearest-neighbor)
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(offscreen, ox, oy, dw, dh);
+
+  // Grid
+  if (showGrid && ps >= 4) {
+    ctx.strokeStyle = 'rgba(140,140,140,0.5)';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= cw; x++) {
+      const px = ox + x * ps + 0.5;
+      ctx.moveTo(px, oy); ctx.lineTo(px, oy + dh);
+    }
+    for (let y = 0; y <= ch; y++) {
+      const py2 = oy + y * ps + 0.5;
+      ctx.moveTo(ox, py2); ctx.lineTo(ox + dw, py2);
+    }
+    ctx.stroke();
+  }
+}
+
+function resizeMainCanvas() {
+  const area       = $('canvas-area');
+  mainCanvas.width  = area.clientWidth;
+  mainCanvas.height = area.clientHeight;
+}
+
+// ── Tool operations ───────────────────────────────────
+function applyDraw(x, y) {
+  if (!py || !inBounds(x, y)) return false;
+  const { r, g, b, a } = drawColor;
+  if (activeTool === 'pen') {
+    py.runPython(`set_pixel(${x},${y},${r},${g},${b},${a})`);
+    return true;
+  }
+  if (activeTool === 'eraser') {
+    py.runPython(`set_pixel(${x},${y},0,0,0,0)`);
+    return true;
+  }
+  return false;
+}
+
+function pickColor(x, y) {
+  if (!py || !inBounds(x, y)) return;
+  const rgba = py.runPython(`get_pixel(${x},${y})`).toJs();
+  drawColor = { r: rgba[0], g: rgba[1], b: rgba[2], a: rgba[3] };
+  updateColorUI();
+  setStatus(`色を取得: rgba(${rgba[0]},${rgba[1]},${rgba[2]},${rgba[3]})`);
+}
+
+// ── Undo / Redo ───────────────────────────────────────
+function doUndo() {
+  if (py && py.runPython('undo()')) { render(); setStatus('元に戻しました'); }
+}
+function doRedo() {
+  if (py && py.runPython('redo()')) { render(); setStatus('やり直しました'); }
+}
+
+// ── New canvas ────────────────────────────────────────
+function newCanvas(size) {
+  cw = ch = size; zoom = 1.0; panX = panY = 0; checkerPat = null;
+  py.runPython(`init(${size},${size})`);
+  resizeMainCanvas();
+  render();
+  setStatus(`新規キャンバス ${size}×${size}`);
+}
+
+// ── Image load ────────────────────────────────────────
+function loadImageFile(file, size) {
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const bytes = new Uint8Array(e.target.result);
+    py.globals.set('_imgbuf', bytes);
+    const ok = await py.runPythonAsync(`load_image(_imgbuf.to_py(), ${size})`);
+    if (ok) {
+      cw = ch = size; zoom = 1.0; panX = panY = 0; checkerPat = null;
+      resizeMainCanvas(); render();
+      setStatus(`${file.name} を ${size}×${size} で読み込みました`);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── PNG Export ────────────────────────────────────────
+function exportPng() {
+  if (!py) return;
+  const raw   = py.runPython('export_png()');
+  const bytes  = (raw instanceof Uint8Array) ? raw : new Uint8Array(raw.toJs());
+  const blob   = new Blob([bytes], { type: 'image/png' });
+  const url    = URL.createObjectURL(blob);
+  const a      = Object.assign(document.createElement('a'), { href: url, download: 'dot_art.png' });
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatus('PNG を書き出しました');
+}
+
+// ── Size dialog ───────────────────────────────────────
+function openSizeDialog(file = null) {
+  pendingFile = file;
+  $('size-dialog').style.display = 'flex';
+  $('dialog-title').textContent  = file ? '縮小サイズを選択' : 'キャンバスサイズを選択';
+}
+
+function closeSizeDialog() {
+  $('size-dialog').style.display = 'none';
+  pendingFile = null;
+}
+
+// ── UI helpers ────────────────────────────────────────
+function setStatus(msg) { $('status').textContent = msg; }
+
+function updateColorUI() {
+  const { r, g, b, a } = drawColor;
+  $('color-btn').style.backgroundColor = `rgba(${r},${g},${b},${a / 255})`;
+  // sync color-input (hex only, ignore alpha)
+  $('color-input').value = '#'
+    + r.toString(16).padStart(2, '0')
+    + g.toString(16).padStart(2, '0')
+    + b.toString(16).padStart(2, '0');
+  $('opacity-slider').value = a;
+  $('opacity-value').textContent = a;
+}
+
+function selectTool(name) {
+  activeTool = name;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  $(`tool-${name}`).classList.add('active');
+  updateCursor();
+  setStatus(`ツール: ${name}`);
+}
+
+function updateCursor() {
+  const map = { pen: 'crosshair', eraser: 'cell', eyedropper: 'pointer' };
+  mainCanvas.style.cursor = map[activeTool] || 'default';
+}
+
+// ── Event setup ───────────────────────────────────────
+function setupCanvas() {
+  // ── Mouse ──
+  mainCanvas.addEventListener('mousedown', e => {
+    const rect = mainCanvas.getBoundingClientRect();
+    const wx = e.clientX - rect.left, wy = e.clientY - rect.top;
+
+    // Middle button → pan
+    if (e.button === 1) {
+      panning = true; panStart = { x: e.clientX, y: e.clientY };
+      mainCanvas.style.cursor = 'move'; e.preventDefault(); return;
+    }
+
+    if (e.button !== 0) return;
+    const { x, y } = toLogical(wx, wy);
+
+    // Ctrl+click or eyedropper tool → pick color
+    if (e.ctrlKey || activeTool === 'eyedropper') {
+      pickColor(x, y);
+      if (activeTool === 'eyedropper') selectTool('pen'); // auto-switch back
+      return;
+    }
+
+    drawing = true; dirty = false; lastDot = null;
+    if (applyDraw(x, y)) { dirty = true; lastDot = { x, y }; render(); }
+  });
+
+  mainCanvas.addEventListener('mousemove', e => {
+    const rect = mainCanvas.getBoundingClientRect();
+    const wx = e.clientX - rect.left, wy = e.clientY - rect.top;
+
+    // Pan
+    if (panning) {
+      panX += e.clientX - panStart.x; panY += e.clientY - panStart.y;
+      panStart = { x: e.clientX, y: e.clientY };
+      render(); return;
+    }
+
+    // Cursor hint for Ctrl hover
+    if (e.ctrlKey && !drawing) mainCanvas.style.cursor = 'pointer';
+    else if (!drawing) updateCursor();
+
+    if (!drawing) return;
+    const { x, y } = toLogical(wx, wy);
+    if (lastDot && lastDot.x === x && lastDot.y === y) return;
+    if (applyDraw(x, y)) { dirty = true; lastDot = { x, y }; render(); }
+  });
+
+  mainCanvas.addEventListener('mouseup', e => {
+    if (e.button === 1 && panning) { panning = false; updateCursor(); return; }
+    if (e.button === 0 && drawing) {
+      drawing = false;
+      if (dirty) { py.runPython('push_history()'); dirty = false; }
+    }
+  });
+
+  // Ctrl+wheel → zoom
+  mainCanvas.addEventListener('wheel', e => {
+    if (!e.ctrlKey) return;
+    zoom = Math.max(0.5, Math.min(8.0, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+    render(); e.preventDefault();
+  }, { passive: false });
+
+  mainCanvas.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function setupKeyboard() {
+  document.addEventListener('keydown', e => {
+    if (!e.ctrlKey) return;
+    if (e.key === 'z' || e.key === 'Z') { e.shiftKey ? doRedo() : doUndo(); e.preventDefault(); }
+    if (e.key === 'y' || e.key === 'Y') { doRedo(); e.preventDefault(); }
+    if (e.key === 's' || e.key === 'S') { exportPng(); e.preventDefault(); }
+  });
+  // Restore cursor when Ctrl released
+  document.addEventListener('keyup', e => {
+    if (e.key === 'Control' && !drawing) updateCursor();
+  });
+}
+
+function setupUI() {
+  // Tools
+  $('tool-pen').onclick        = () => selectTool('pen');
+  $('tool-eraser').onclick     = () => selectTool('eraser');
+  $('tool-eyedropper').onclick = () => selectTool('eyedropper');
+
+  // Color picker
+  $('color-btn').onclick = () => $('color-input').click();
+  $('color-input').addEventListener('input', e => {
+    const hex = e.target.value;
+    drawColor.r = parseInt(hex.slice(1, 3), 16);
+    drawColor.g = parseInt(hex.slice(3, 5), 16);
+    drawColor.b = parseInt(hex.slice(5, 7), 16);
+    updateColorUI();
+  });
+  $('opacity-slider').addEventListener('input', e => {
+    drawColor.a = parseInt(e.target.value);
+    updateColorUI();
+  });
+
+  // Grid / Zoom reset
+  $('btn-grid').onclick = function () {
+    showGrid = !showGrid;
+    this.classList.toggle('active', showGrid);
+    this.textContent = showGrid ? 'グリッド ON' : 'グリッド OFF';
+    render();
+  };
+  $('btn-zoom-reset').onclick = () => { zoom = 1.0; panX = panY = 0; render(); };
+
+  // Undo / Redo
+  $('btn-undo').onclick = doUndo;
+  $('btn-redo').onclick = doRedo;
+
+  // New canvas
+  $('btn-new').onclick = () => openSizeDialog(null);
+
+  // Open file
+  $('btn-open').onclick = () => $('file-input').click();
+  $('file-input').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) openSizeDialog(f);
+    e.target.value = '';
+  });
+
+  // Export
+  $('btn-export').onclick = exportPng;
+
+  // Size dialog buttons
+  document.querySelectorAll('.size-option').forEach(btn => {
+    btn.onclick = () => {
+      const size = parseInt(btn.dataset.size);
+      if (pendingFile) loadImageFile(pendingFile, size);
+      else             newCanvas(size);
+      closeSizeDialog();
+    };
+  });
+  $('size-cancel').onclick = closeSizeDialog;
+  $('size-dialog').addEventListener('click', e => {
+    if (e.target === $('size-dialog')) closeSizeDialog();
+  });
+
+  // Window resize
+  window.addEventListener('resize', () => { resizeMainCanvas(); render(); });
+}
+
+function setupDragDrop() {
+  document.body.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+  document.body.addEventListener('drop', e => {
+    e.preventDefault();
+    for (const file of e.dataTransfer.files) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (IMG_EXTS.has(ext)) { openSizeDialog(file); break; }
+    }
+  });
+}
+
+// ── Initialization ────────────────────────────────────
+async function initApp() {
+  const loadStatus = $('loading-status');
+
+  loadStatus.textContent = 'Pyodide を読み込み中...';
+  py = await loadPyodide({ indexURL: `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VER}/full/` });
+
+  loadStatus.textContent = 'Pillow を読み込み中...';
+  await py.loadPackage(['pillow']);
+
+  loadStatus.textContent = 'コアロジックを読み込み中...';
+  const coreCode = await fetch('./py/core.py').then(r => r.text());
+  py.runPython(coreCode);
+
+  // Show app
+  $('loading').style.display = 'none';
+  $('app').style.display     = 'flex';
+
+  resizeMainCanvas();
+  setupCanvas();
+  setupKeyboard();
+  setupUI();
+  setupDragDrop();
+  updateColorUI();
+  newCanvas(32);
+  setStatus('準備完了  |  Ctrl+ホイール:ズーム  |  中クリックドラッグ:パン  |  Ctrl+クリック:スポイト');
+}
+
+initApp().catch(err => {
+  console.error(err);
+  $('loading-status').textContent = '初期化エラー: ' + err.message;
+});

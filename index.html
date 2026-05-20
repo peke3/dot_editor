@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ドット絵エディタ</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Loading overlay ── -->
+<div id="loading">
+  <div class="loading-box">
+    <p>🎨 ドット絵エディタ</p>
+    <div class="spinner"></div>
+    <p id="loading-status">初期化中...</p>
+  </div>
+</div>
+
+<!-- ── Main app ── -->
+<div id="app" style="display:none; flex-direction:column; height:100vh;">
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <button id="btn-new">📄 新規</button>
+    <button id="btn-open">📂 開く</button>
+    <button id="btn-export">💾 書き出し</button>
+    <div class="sep"></div>
+    <button id="btn-undo">↩ 元に戻す</button>
+    <button id="btn-redo">↪ やり直す</button>
+  </div>
+
+  <!-- Main content -->
+  <div id="main-content">
+
+    <!-- Tool panel -->
+    <div id="tool-panel">
+      <button class="tool-btn active" id="tool-pen">✏️ ペン</button>
+      <button class="tool-btn" id="tool-eraser">🧹 消しゴム</button>
+      <button class="tool-btn" id="tool-eyedropper">💧 スポイト</button>
+
+      <div class="sep-h"></div>
+
+      <label>描画色</label>
+      <button id="color-btn"></button>
+      <input type="color" id="color-input" value="#000000" style="display:none">
+
+      <label>不透明度</label>
+      <input type="range" id="opacity-slider" min="0" max="255" value="255">
+      <span id="opacity-value">255</span>
+
+      <div class="sep-h"></div>
+
+      <button id="btn-grid" class="toggle-btn active">グリッド ON</button>
+      <button id="btn-zoom-reset">ズームリセット</button>
+    </div>
+
+    <!-- Canvas -->
+    <div id="canvas-area">
+      <canvas id="main-canvas"></canvas>
+    </div>
+
+  </div><!-- /main-content -->
+
+  <!-- Status bar -->
+  <div id="status-bar"><span id="status">準備中...</span></div>
+
+</div><!-- /app -->
+
+<!-- Size dialog -->
+<div id="size-dialog">
+  <div class="dialog-box">
+    <h3 id="dialog-title">キャンバスサイズを選択</h3>
+    <button class="size-option" data-size="16">16 × 16</button>
+    <button class="size-option" data-size="32">32 × 32</button>
+    <button class="size-option" data-size="64">64 × 64</button>
+    <button id="size-cancel">キャンセル</button>
+  </div>
+</div>
+
+<!-- Hidden file input -->
+<input type="file" id="file-input"
+       accept=".png,.jpg,.jpeg,.bmp,.gif,.webp"
+       style="display:none">
+
+<!-- Pyodide -->
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

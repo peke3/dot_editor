@@ -1,0 +1,119 @@
+/* ── Reset & base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #2b2b2b;
+  --panel:    #363636;
+  --border:   #484848;
+  --accent:   #5a9fd4;
+  --text:     #d4d4d4;
+  --text-dim: #888;
+  --btn-bg:   #444;
+  --btn-hov:  #555;
+  --btn-act:  #5a9fd4;
+}
+
+html, body { height: 100%; font-family: 'Segoe UI', Meiryo, sans-serif; font-size: 13px; }
+
+body {
+  display: flex; flex-direction: column;
+  background: var(--bg); color: var(--text);
+  overflow: hidden; height: 100vh;
+}
+
+/* ── Loading overlay ── */
+#loading {
+  position: fixed; inset: 0; z-index: 999;
+  background: #1e1e1e; display: flex; align-items: center; justify-content: center;
+}
+.loading-box { text-align: center; }
+.loading-box p { margin: 6px 0; color: var(--text); }
+.loading-box p:first-child { font-size: 18px; font-weight: bold; }
+#loading-status { color: var(--text-dim); font-size: 12px; }
+.spinner {
+  width: 40px; height: 40px; margin: 16px auto;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── App layout ── */
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ── Toolbar ── */
+#toolbar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 8px;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#toolbar .sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+/* ── Main ── */
+#main-content { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Tool panel ── */
+#tool-panel {
+  width: 108px; flex-shrink: 0;
+  background: var(--panel); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 5px; padding: 8px 6px;
+  overflow-y: auto;
+}
+#tool-panel label { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
+.sep-h { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* ── Canvas area ── */
+#canvas-area {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: #1e1e1e; overflow: hidden; position: relative;
+}
+#main-canvas { display: block; cursor: crosshair; }
+
+/* ── Status bar ── */
+#status-bar {
+  height: 24px; line-height: 24px;
+  padding: 0 10px;
+  background: var(--panel); border-top: 1px solid var(--border);
+  color: var(--text-dim); font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* ── Buttons ── */
+button {
+  background: var(--btn-bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 4px 8px; cursor: pointer; font-size: 12px;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+button:hover  { background: var(--btn-hov); }
+button.active { background: var(--btn-act); border-color: var(--btn-act); color: #fff; }
+
+.tool-btn { width: 100%; text-align: left; padding: 5px 6px; }
+
+#color-btn {
+  width: 100%; height: 32px;
+  border: 2px solid var(--border); border-radius: 4px;
+  cursor: pointer; padding: 0;
+  background: #000;
+}
+
+#opacity-slider { width: 100%; accent-color: var(--accent); }
+#opacity-value  { color: var(--text-dim); font-size: 11px; }
+
+/* ── Dialog (size select) ── */
+#size-dialog {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.6);
+  display: none; align-items: center; justify-content: center;
+}
+.dialog-box {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 20px; min-width: 200px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.dialog-box h3 { margin-bottom: 4px; font-size: 14px; }
+.size-option { font-size: 14px; padding: 8px; }
+#size-cancel  { color: var(--text-dim); background: transparent; border-color: var(--border); }
