@@ -145,7 +145,7 @@ function applyDraw(x, y) {
     return true;
   }
   if (activeTool === 'eraser') {
-    py.runPython(`set_pixel(${x},${y},0,0,0,${255 - a})`);
+    py.runPython(`erase_pixel(${x},${y},${a})`);
     return true;
   }
   return false;

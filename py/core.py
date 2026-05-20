@@ -116,6 +116,14 @@ def get_pixel(x, y):
     return [0, 0, 0, 0]
 
 
+def erase_pixel(x, y, amount):
+    """現在のアルファ値から amount を引く（RGB は維持、0未満にはならない）"""
+    if _canvas is None:
+        return
+    r, g, b, a = _canvas.get_pixel(int(x), int(y))
+    _canvas.set_pixel(int(x), int(y), r, g, b, max(0, a - int(amount)))
+
+
 def push_history():
     if _history:
         _history.push()
