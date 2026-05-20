@@ -20,6 +20,7 @@ let panStart   = { x: 0, y: 0 };
 let lastDot    = null;
 let dirty      = false;       // current stroke changed canvas?
 let pendingFile = null;        // file waiting for size dialog
+let touchDist  = null;         // 2本指のピンチ開始距離
 
 // ── DOM helpers ───────────────────────────────────────
 const $  = id => document.getElementById(id);
@@ -298,6 +299,89 @@ function setupCanvas() {
   }, { passive: false });
 
   mainCanvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  // ── Touch ──────────────────────────────────────────
+  // キャンバス座標に変換
+  function touchPos(t) {
+    const r = mainCanvas.getBoundingClientRect();
+    return { wx: t.clientX - r.left, wy: t.clientY - r.top };
+  }
+  // 2本指の中点（クライアント座標）
+  function touchMid(t0, t1) {
+    return { cx: (t0.clientX + t1.clientX) / 2,
+             cy: (t0.clientY + t1.clientY) / 2 };
+  }
+  // 2本指の距離
+  function touchDist2(t0, t1) {
+    const dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  mainCanvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+
+    if (e.touches.length === 1) {
+      // 1本指 → 描画 / スポイト
+      const { wx, wy } = touchPos(e.touches[0]);
+      const { x, y }   = toLogical(wx, wy);
+
+      if (activeTool === 'eyedropper') {
+        pickColor(x, y); selectTool('pen'); return;
+      }
+      drawing = true; dirty = false; lastDot = null;
+      if (applyDraw(x, y)) { dirty = true; lastDot = { x, y }; render(); }
+
+    } else if (e.touches.length === 2) {
+      // 2本指 → パン＋ピンチズーム準備
+      if (drawing) {
+        // 描画ストロークをここで確定
+        drawing = false;
+        if (dirty) { py.runPython('push_history()'); dirty = false; }
+      }
+      panning   = true;
+      const mid = touchMid(e.touches[0], e.touches[1]);
+      panStart  = { x: mid.cx, y: mid.cy };
+      touchDist = touchDist2(e.touches[0], e.touches[1]);
+    }
+  }, { passive: false });
+
+  mainCanvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+
+    if (e.touches.length === 1 && drawing) {
+      // 1本指ドラッグ → 描画継続
+      const { wx, wy } = touchPos(e.touches[0]);
+      const { x, y }   = toLogical(wx, wy);
+      if (lastDot && lastDot.x === x && lastDot.y === y) return;
+      if (applyDraw(x, y)) { dirty = true; lastDot = { x, y }; render(); }
+
+    } else if (e.touches.length === 2 && panning) {
+      // 2本指 → パン
+      const mid = touchMid(e.touches[0], e.touches[1]);
+      panX += mid.cx - panStart.x;
+      panY += mid.cy - panStart.y;
+      panStart = { x: mid.cx, y: mid.cy };
+
+      // ピンチズーム
+      const d = touchDist2(e.touches[0], e.touches[1]);
+      if (touchDist) {
+        zoom = Math.max(0.5, Math.min(8.0, zoom * (d / touchDist)));
+        touchDist = d;
+      }
+      render();
+    }
+  }, { passive: false });
+
+  mainCanvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (drawing && e.touches.length === 0) {
+      drawing = false;
+      if (dirty) { py.runPython('push_history()'); dirty = false; }
+    }
+    if (e.touches.length < 2) {
+      panning = false; touchDist = null;
+    }
+  }, { passive: false });
 }
 
 function setupKeyboard() {
