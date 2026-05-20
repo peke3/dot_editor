@@ -1,7 +1,7 @@
 'use strict';
 
 // ── App version ───────────────────────────────────────
-const VERSION    = '1.1.1';
+const VERSION    = '1.1.2';
 
 // ── Pyodide CDN version ───────────────────────────────
 const PYODIDE_VER = '0.26.4';
@@ -24,6 +24,7 @@ let lastDot    = null;
 let dirty          = false;   // current stroke changed canvas?
 let pendingFile    = null;    // file waiting for size dialog
 let touchDist      = null;    // 2本指のピンチ開始距離
+let wasMultiTouch  = false;   // 2本指操作直後フラグ（誤タップ防止）
 let checkerContrast = 20;     // チェッカー明暗差 (0=単色 〜 100=最大)
 
 // ── DOM helpers ───────────────────────────────────────
@@ -146,6 +147,22 @@ function applyDraw(x, y) {
   }
   if (activeTool === 'eraser') {
     py.runPython(`erase_pixel(${x},${y},${a})`);
+    return true;
+  }
+  return false;
+}
+
+// lastDot から (x,y) まで線を引く（ドラッグ中に呼ぶ）
+function applyLineTo(x, y) {
+  if (!py || !lastDot || !inBounds(x, y)) return false;
+  if (lastDot.x === x && lastDot.y === y) return false;
+  const { r, g, b, a } = drawColor;
+  if (activeTool === 'pen') {
+    py.runPython(`draw_line(${lastDot.x},${lastDot.y},${x},${y},${r},${g},${b},${a})`);
+    return true;
+  }
+  if (activeTool === 'eraser') {
+    py.runPython(`erase_line(${lastDot.x},${lastDot.y},${x},${y},${a})`);
     return true;
   }
   return false;
@@ -289,8 +306,7 @@ function setupCanvas() {
 
     if (!drawing) return;
     const { x, y } = toLogical(wx, wy);
-    if (lastDot && lastDot.x === x && lastDot.y === y) return;
-    if (applyDraw(x, y)) { dirty = true; lastDot = { x, y }; render(); }
+    if (applyLineTo(x, y)) { dirty = true; lastDot = { x, y }; render(); }
   });
 
   mainCanvas.addEventListener('mouseup', e => {
@@ -301,10 +317,10 @@ function setupCanvas() {
     }
   });
 
-  // Ctrl+wheel → zoom
+  // Ctrl+wheel → zoom（最大32倍）
   mainCanvas.addEventListener('wheel', e => {
     if (!e.ctrlKey) return;
-    zoom = Math.max(0.5, Math.min(8.0, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+    zoom = Math.max(0.5, Math.min(32.0, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
     render(); e.preventDefault();
   }, { passive: false });
 
@@ -331,6 +347,9 @@ function setupCanvas() {
     e.preventDefault();
 
     if (e.touches.length === 1) {
+      // 2本指操作の直後は誤タップを無視
+      if (wasMultiTouch) return;
+
       // 1本指 → 描画 / スポイト
       const { wx, wy } = touchPos(e.touches[0]);
       const { x, y }   = toLogical(wx, wy);
@@ -342,9 +361,9 @@ function setupCanvas() {
       if (applyDraw(x, y)) { dirty = true; lastDot = { x, y }; render(); }
 
     } else if (e.touches.length === 2) {
-      // 2本指 → パン＋ピンチズーム準備
+      wasMultiTouch = true;
+      // 描画中に2本目が来たらストロークを確定
       if (drawing) {
-        // 描画ストロークをここで確定
         drawing = false;
         if (dirty) { py.runPython('push_history()'); dirty = false; }
       }
@@ -359,11 +378,10 @@ function setupCanvas() {
     e.preventDefault();
 
     if (e.touches.length === 1 && drawing) {
-      // 1本指ドラッグ → 描画継続
+      // 1本指ドラッグ → 線を引きながら描画
       const { wx, wy } = touchPos(e.touches[0]);
       const { x, y }   = toLogical(wx, wy);
-      if (lastDot && lastDot.x === x && lastDot.y === y) return;
-      if (applyDraw(x, y)) { dirty = true; lastDot = { x, y }; render(); }
+      if (applyLineTo(x, y)) { dirty = true; lastDot = { x, y }; render(); }
 
     } else if (e.touches.length === 2 && panning) {
       // 2本指 → パン
@@ -372,10 +390,10 @@ function setupCanvas() {
       panY += mid.cy - panStart.y;
       panStart = { x: mid.cx, y: mid.cy };
 
-      // ピンチズーム
+      // ピンチズーム（最大32倍）
       const d = touchDist2(e.touches[0], e.touches[1]);
       if (touchDist) {
-        zoom = Math.max(0.5, Math.min(8.0, zoom * (d / touchDist)));
+        zoom = Math.max(0.5, Math.min(32.0, zoom * (d / touchDist)));
         touchDist = d;
       }
       render();
@@ -384,11 +402,16 @@ function setupCanvas() {
 
   mainCanvas.addEventListener('touchend', e => {
     e.preventDefault();
-    if (drawing && e.touches.length === 0) {
-      drawing = false;
-      if (dirty) { py.runPython('push_history()'); dirty = false; }
-    }
-    if (e.touches.length < 2) {
+    // 全本指が離れた
+    if (e.touches.length === 0) {
+      wasMultiTouch = false;  // 次のタップから通常に戻す
+      if (drawing) {
+        drawing = false;
+        if (dirty) { py.runPython('push_history()'); dirty = false; }
+      }
+      panning = false; touchDist = null;
+    } else if (e.touches.length < 2) {
+      // 1本だけ残った → パン終了、描画はまだ始めない
       panning = false; touchDist = null;
     }
   }, { passive: false });

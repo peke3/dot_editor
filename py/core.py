@@ -124,6 +124,48 @@ def erase_pixel(x, y, amount):
     _canvas.set_pixel(int(x), int(y), r, g, b, max(0, a - int(amount)))
 
 
+def draw_line(x0, y0, x1, y1, r, g, b, a):
+    """ブレゼンハムの線分アルゴリズムでペン描画"""
+    if _canvas is None:
+        return
+    x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
+    r, g, b, a = int(r), int(g), int(b), int(a)
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx - dy
+    while True:
+        _canvas.set_pixel(x0, y0, r, g, b, a)
+        if x0 == x1 and y0 == y1:
+            break
+        e2 = err * 2
+        if e2 > -dy:
+            err -= dy; x0 += sx
+        if e2 < dx:
+            err += dx; y0 += sy
+
+
+def erase_line(x0, y0, x1, y1, amount):
+    """ブレゼンハムの線分アルゴリズムで消しゴム描画"""
+    if _canvas is None:
+        return
+    x0, y0, x1, y1, amount = int(x0), int(y0), int(x1), int(y1), int(amount)
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx - dy
+    while True:
+        cr, cg, cb, ca = _canvas.get_pixel(x0, y0)
+        _canvas.set_pixel(x0, y0, cr, cg, cb, max(0, ca - amount))
+        if x0 == x1 and y0 == y1:
+            break
+        e2 = err * 2
+        if e2 > -dy:
+            err -= dy; x0 += sx
+        if e2 < dx:
+            err += dx; y0 += sy
+
+
 def push_history():
     if _history:
         _history.push()
