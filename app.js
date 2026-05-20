@@ -1,7 +1,7 @@
 'use strict';
 
 // ── App version ───────────────────────────────────────
-const VERSION    = '1.1.6';
+const VERSION    = '1.1.7';
 
 // ── Pyodide CDN version ───────────────────────────────
 const PYODIDE_VER = '0.26.4';
@@ -430,7 +430,7 @@ function setupCanvas() {
     if (e.touches.length === 0) {
       // 全指が離れた → マルチタップ判定
       const elapsed = gestureStartTime ? Date.now() - gestureStartTime : 9999;
-      if (peakTouches >= 2 && elapsed < 300 && panDistAccum < 15) {
+      if (peakTouches >= 2 && elapsed < 500 && panDistAccum < 30) {
         // 2本指タップ → 元に戻す、3本指以上 → やり直し
         if (peakTouches === 2) doUndo();
         else                   doRedo();
@@ -566,6 +566,17 @@ function setupUI() {
 
   // Export
   $('btn-export').onclick = exportPng;
+
+  // Share（Web Share API 対応端末のみ表示 → iOS Safari など）
+  if (navigator.share) {
+    $('btn-share').style.display = '';
+    $('btn-share').onclick = () => {
+      navigator.share({
+        title: 'ドット絵エディタ',
+        url: window.location.href,
+      }).catch(() => {});
+    };
+  }
 
   // Size dialog buttons
   document.querySelectorAll('.size-option').forEach(btn => {
