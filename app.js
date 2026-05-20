@@ -1,7 +1,11 @@
 'use strict';
 
 // ── App version ───────────────────────────────────────
-const VERSION    = '1.1.8';
+const VERSION    = '1.1.9';
+
+// ── App info（タイトルや URL を変えるときはここだけ編集） ──
+const APP_TITLE  = 'ドット絵エディタ';
+const APP_URL    = 'https://peke3.github.io/dot_editor/';
 
 // ── Pyodide CDN version ───────────────────────────────
 const PYODIDE_VER = '0.26.4';
@@ -578,9 +582,13 @@ function setupUI() {
       const file  = new File([bytes], 'dot_art.png', { type: 'image/png' });
       // ファイル共有対応なら画像を、非対応なら URL を共有
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'ドット絵' }).catch(() => {});
+        await navigator.share({
+          files: [file],
+          title: APP_TITLE,
+          text:  `${APP_TITLE}\n${APP_URL}`,
+        }).catch(() => {});
       } else {
-        await navigator.share({ title: 'ドット絵エディタ', url: window.location.href }).catch(() => {});
+        await navigator.share({ title: APP_TITLE, url: APP_URL }).catch(() => {});
       }
     };
   }
