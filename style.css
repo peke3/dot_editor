@@ -56,11 +56,17 @@ body {
 
 /* ── Tool panel ── */
 #tool-panel {
-  width: 108px; flex-shrink: 0;
+  width: 112px; flex-shrink: 0;
   background: var(--panel); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 5px; padding: 8px 6px;
-  overflow-y: auto;
+  overflow: hidden;                          /* 折りたたみ時にクリップ */
+  transition: width 0.22s ease, padding 0.22s ease, border-width 0.22s ease;
 }
+#tool-panel.collapsed {
+  width: 0; padding-left: 0; padding-right: 0; border-width: 0;
+}
+/* 折りたたみ中はコンテンツが透けて見えないよう幅0で非表示 */
+#tool-panel.collapsed * { visibility: hidden; }
 #tool-panel label { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
 .sep-h { height: 1px; background: var(--border); margin: 4px 0; }
 
@@ -93,6 +99,13 @@ button.active { background: var(--btn-act); border-color: var(--btn-act); color:
 
 .tool-btn { width: 100%; text-align: left; padding: 5px 6px; }
 
+/* ── 折りたたみボタン ── */
+#btn-toggle-panel {
+  font-size: 16px; padding: 4px 10px;
+  min-width: 36px;
+}
+#btn-toggle-panel.active { background: var(--btn-act); border-color: var(--btn-act); color: #fff; }
+
 /* ── バージョンラベル ── */
 .panel-spacer   { flex: 1; }  /* 残りスペースを埋めてラベルを下に押す */
 .version-label  {
@@ -108,10 +121,13 @@ button.active { background: var(--btn-act); border-color: var(--btn-act); color:
   .tool-btn { padding: 10px 8px; font-size: 14px; }
   #color-btn-wrap { height: 44px; }
   #color-btn { height: 100%; }
-  #tool-panel { width: 120px; gap: 7px; }
-  #opacity-slider { height: 24px; }
+  /* 展開時はやや広め */
+  #tool-panel:not(.collapsed) { width: 124px; gap: 7px; }
+  #opacity-slider, #checker-slider { height: 24px; }
   /* ステータスバーを少し高く */
   #status-bar { height: 28px; line-height: 28px; font-size: 12px; }
+  /* 折りたたみボタンを大きく */
+  #btn-toggle-panel { font-size: 18px; padding: 6px 12px; min-width: 44px; }
 }
 
 /* color-btn-wrap: ボタンの上にinputを透明に重ねる */

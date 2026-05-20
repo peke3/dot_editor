@@ -6,7 +6,7 @@ import io
 
 
 class Canvas:
-    VALID_SIZES = [16, 32, 64]
+    VALID_SIZES = [16, 32, 64, 256]
 
     def __init__(self, width, height):
         self.width = width
@@ -144,30 +144,25 @@ def canvas_size():
 def load_image(data, target_size):
     """
     バイト列から画像を読み込み target_size x target_size にリサイズ。
-    成功したら True を返す。
+    tobytes() で一括転送するためピクセルループなし。
     """
     global _canvas, _history
     from PIL import Image
     img = Image.open(io.BytesIO(bytes(data))).convert('RGBA')
     img = img.resize((int(target_size), int(target_size)), Image.NEAREST)
     c = Canvas(int(target_size), int(target_size))
-    for y in range(c.height):
-        for x in range(c.width):
-            c.set_pixel(x, y, *img.getpixel((x, y)))
+    c._data = bytearray(img.tobytes())  # 一括転送
     _canvas  = c
     _history = History(c)
     return True
 
 
 def export_png():
-    """キャンバスを PNG bytes で返す"""
+    """キャンバスを PNG bytes で返す（frombytes で一括転送）"""
     from PIL import Image
     if _canvas is None:
         return b''
-    img = Image.new('RGBA', (_canvas.width, _canvas.height))
-    for y in range(_canvas.height):
-        for x in range(_canvas.width):
-            img.putpixel((x, y), _canvas.get_pixel(x, y))
+    img = Image.frombytes('RGBA', (_canvas.width, _canvas.height), bytes(_canvas._data))
     buf = io.BytesIO()
     img.save(buf, 'PNG')
     return buf.getvalue()

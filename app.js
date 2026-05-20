@@ -145,7 +145,7 @@ function applyDraw(x, y) {
     return true;
   }
   if (activeTool === 'eraser') {
-    py.runPython(`set_pixel(${x},${y},0,0,0,0)`);
+    py.runPython(`set_pixel(${x},${y},0,0,0,${255 - a})`);
     return true;
   }
   return false;
@@ -435,6 +435,25 @@ function setupUI() {
     checkerPat = null; // パターンキャッシュをリセット
     render();
   });
+
+  // パネル折りたたみ
+  const panel       = $('tool-panel');
+  const toggleBtn   = $('btn-toggle-panel');
+  const isTouch     = window.matchMedia('(pointer: coarse)').matches;
+
+  // スマホはデフォルトで折りたたむ、PCは開く
+  if (isTouch) {
+    panel.classList.add('collapsed');
+  } else {
+    toggleBtn.classList.add('active');
+  }
+
+  toggleBtn.onclick = () => {
+    panel.classList.toggle('collapsed');
+    toggleBtn.classList.toggle('active', !panel.classList.contains('collapsed'));
+    // パネル開閉後にキャンバスサイズを再計算
+    setTimeout(() => { resizeMainCanvas(); render(); }, 250);
+  };
 
   // Grid / Zoom reset
   $('btn-grid').onclick = function () {
