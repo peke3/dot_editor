@@ -1,5 +1,8 @@
 'use strict';
 
+// ── App version ───────────────────────────────────────
+const VERSION    = '1.1.0';
+
 // ── Pyodide CDN version ───────────────────────────────
 const PYODIDE_VER = '0.26.4';
 
@@ -18,9 +21,10 @@ let drawing    = false;
 let panning    = false;
 let panStart   = { x: 0, y: 0 };
 let lastDot    = null;
-let dirty      = false;       // current stroke changed canvas?
-let pendingFile = null;        // file waiting for size dialog
-let touchDist  = null;         // 2本指のピンチ開始距離
+let dirty          = false;   // current stroke changed canvas?
+let pendingFile    = null;    // file waiting for size dialog
+let touchDist      = null;    // 2本指のピンチ開始距離
+let checkerContrast = 20;     // チェッカー明暗差 (0=単色 〜 100=最大)
 
 // ── DOM helpers ───────────────────────────────────────
 const $  = id => document.getElementById(id);
@@ -61,13 +65,19 @@ function toLogical(wx, wy) {
 function inBounds(x, y) { return x >= 0 && x < cw && y >= 0 && y < ch; }
 
 // ── Checker pattern ───────────────────────────────────
+// contrast: 0(単色グレー) 〜 100(最大コントラスト)
+// midpoint 185 を基準に明暗を分ける
 function makeChecker(cell) {
+  const mid   = 185;
+  const delta = Math.round(checkerContrast * 0.35); // 0→0, 100→35
+  const light = `rgb(${mid + delta},${mid + delta},${mid + delta})`;
+  const dark  = `rgb(${mid - delta},${mid - delta},${mid - delta})`;
   const sz  = cell * 2;
   const pat = document.createElement('canvas');
   pat.width = pat.height = sz;
   const pc  = pat.getContext('2d');
-  pc.fillStyle = '#c8c8c8'; pc.fillRect(0, 0, sz, sz);
-  pc.fillStyle = '#a0a0a0';
+  pc.fillStyle = light; pc.fillRect(0, 0, sz, sz);
+  pc.fillStyle = dark;
   pc.fillRect(0, 0, cell, cell);
   pc.fillRect(cell, cell, cell, cell);
   return ctx.createPattern(pat, 'repeat');
@@ -417,6 +427,16 @@ function setupUI() {
     updateColorUI();
   });
 
+  // Checker contrast slider
+  $('checker-slider').value = checkerContrast;
+  $('checker-value').textContent = checkerContrast;
+  $('checker-slider').addEventListener('input', e => {
+    checkerContrast = parseInt(e.target.value);
+    $('checker-value').textContent = checkerContrast;
+    checkerPat = null; // パターンキャッシュをリセット
+    render();
+  });
+
   // Grid / Zoom reset
   $('btn-grid').onclick = function () {
     showGrid = !showGrid;
@@ -490,6 +510,9 @@ async function initApp() {
   // Show app
   $('loading').style.display = 'none';
   $('app').style.display     = 'flex';
+
+  // バージョン表示
+  $('version-label').textContent = `v${VERSION}`;
 
   resizeMainCanvas();
   setupCanvas();

@@ -93,6 +93,14 @@ button.active { background: var(--btn-act); border-color: var(--btn-act); color:
 
 .tool-btn { width: 100%; text-align: left; padding: 5px 6px; }
 
+/* ── バージョンラベル ── */
+.panel-spacer   { flex: 1; }  /* 残りスペースを埋めてラベルを下に押す */
+.version-label  {
+  font-size: 10px; color: var(--text-dim);
+  text-align: center; padding-bottom: 2px;
+  letter-spacing: 0.05em;
+}
+
 /* ── スマホ対応 ── */
 @media (pointer: coarse) {
   /* タッチデバイスではボタンを大きく */
