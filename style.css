@@ -48,8 +48,12 @@ body {
   padding: 4px 8px;
   background: var(--panel); border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* iOS慣性スクロール */
+  scrollbar-width: none;            /* Firefox: バー非表示 */
 }
-#toolbar .sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+#toolbar::-webkit-scrollbar { display: none; } /* Chrome/Safari: バー非表示 */
+#toolbar .sep { width: 1px; min-width: 1px; height: 20px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
 
 /* ── Main ── */
 #main-content { display: flex; flex: 1; overflow: hidden; }
@@ -98,6 +102,7 @@ button {
   padding: 4px 8px; cursor: pointer; font-size: 12px;
   transition: background 0.1s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 button:hover  { background: var(--btn-hov); }
 button.active { background: var(--btn-act); border-color: var(--btn-act); color: #fff; }

@@ -1,7 +1,7 @@
 'use strict';
 
 // ── App version ───────────────────────────────────────
-const VERSION    = '1.1.4';
+const VERSION    = '1.1.5';
 
 // ── Pyodide CDN version ───────────────────────────────
 const PYODIDE_VER = '0.26.4';
@@ -25,6 +25,9 @@ let dirty          = false;   // current stroke changed canvas?
 let pendingFile    = null;    // file waiting for size dialog
 let touchDist      = null;    // 2本指のピンチ開始距離
 let wasMultiTouch  = false;   // 2本指操作直後フラグ（誤タップ防止）
+let gestureStartTime = null;  // ジェスチャー開始時刻（1本指touchstart時）
+let peakTouches    = 0;       // このジェスチャー中の最大タッチ数
+let panDistAccum   = 0;       // マルチタッチ中の累積移動距離（タップ判定用）
 let checkerContrast = 20;     // チェッカー明暗差 (0=単色 〜 100=最大)
 let brushSize  = 1;           // ブラシサイズ (1〜16)
 let brushShape = 'square';    // 'square' | 'circle'
@@ -348,6 +351,11 @@ function setupCanvas() {
     e.preventDefault();
 
     if (e.touches.length === 1) {
+      // 新しいジェスチャー開始
+      gestureStartTime = Date.now();
+      peakTouches      = 1;
+      panDistAccum     = 0;
+
       // 2本指操作の直後は誤タップを無視
       if (wasMultiTouch) return;
 
@@ -362,16 +370,29 @@ function setupCanvas() {
       if (applyDraw(x, y)) { dirty = true; lastDot = { x, y }; render(); }
 
     } else if (e.touches.length === 2) {
+      peakTouches   = Math.max(peakTouches, 2);
       wasMultiTouch = true;
-      // 描画中に2本目が来たらストロークを確定
+      panDistAccum  = 0;   // パン距離をリセット（2本指タップ判定用）
+
+      // 1本指で描いていた誤描画をキャンセルしてヒストリに積まない
       if (drawing) {
         drawing = false;
-        if (dirty) { py.runPython('push_history()'); dirty = false; }
+        if (dirty) {
+          py.runPython('cancel_stroke()');
+          dirty = false;
+          render();
+        }
       }
+
       panning   = true;
       const mid = touchMid(e.touches[0], e.touches[1]);
       panStart  = { x: mid.cx, y: mid.cy };
       touchDist = touchDist2(e.touches[0], e.touches[1]);
+
+    } else if (e.touches.length >= 3) {
+      // 3本指以上 → パン/ズームを止めてタップ待ち
+      peakTouches = Math.max(peakTouches, e.touches.length);
+      panning     = false;
     }
   }, { passive: false });
 
@@ -385,15 +406,18 @@ function setupCanvas() {
       if (applyLineTo(x, y)) { dirty = true; lastDot = { x, y }; render(); }
 
     } else if (e.touches.length === 2 && panning) {
-      // 2本指 → パン
-      const mid = touchMid(e.touches[0], e.touches[1]);
-      panX += mid.cx - panStart.x;
-      panY += mid.cy - panStart.y;
+      // 2本指 → パン＋ピンチズーム
+      const mid    = touchMid(e.touches[0], e.touches[1]);
+      const stepDx = mid.cx - panStart.x;
+      const stepDy = mid.cy - panStart.y;
+      // 累積移動距離を記録（タップ判定に使う）
+      panDistAccum += Math.sqrt(stepDx * stepDx + stepDy * stepDy);
+      panX += stepDx; panY += stepDy;
       panStart = { x: mid.cx, y: mid.cy };
 
-      // ピンチズーム（最大32倍）
       const d = touchDist2(e.touches[0], e.touches[1]);
       if (touchDist) {
+        panDistAccum += Math.abs(d - touchDist) * 0.5; // ピンチ量も加算
         zoom = Math.max(0.25, Math.min(32.0, zoom * (d / touchDist)));
         touchDist = d;
       }
@@ -403,16 +427,31 @@ function setupCanvas() {
 
   mainCanvas.addEventListener('touchend', e => {
     e.preventDefault();
-    // 全本指が離れた
+
     if (e.touches.length === 0) {
-      wasMultiTouch = false;  // 次のタップから通常に戻す
+      // 全指が離れた → マルチタップ判定
+      const elapsed = gestureStartTime ? Date.now() - gestureStartTime : 9999;
+      if (peakTouches >= 2 && elapsed < 300 && panDistAccum < 15) {
+        // 2本指タップ → 元に戻す、3本指以上 → やり直し
+        if (peakTouches === 2) doUndo();
+        else                   doRedo();
+        drawing = false; dirty = false; panning = false;
+        touchDist = null; wasMultiTouch = false;
+        peakTouches = 0; gestureStartTime = null;
+        return;
+      }
+
+      // 通常のジェスチャー終了
+      wasMultiTouch = false;
       if (drawing) {
         drawing = false;
         if (dirty) { py.runPython('push_history()'); dirty = false; }
       }
       panning = false; touchDist = null;
+      peakTouches = 0; gestureStartTime = null;
+
     } else if (e.touches.length < 2) {
-      // 1本だけ残った → パン終了、描画はまだ始めない
+      // 1本だけ残った → パン終了（描画は次のtouchstartから）
       panning = false; touchDist = null;
     }
   }, { passive: false });

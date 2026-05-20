@@ -244,6 +244,12 @@ def erase_line(x0, y0, x1, y1, amount):
             err += dx; y0 += sy
 
 
+def cancel_stroke():
+    """描画中のストロークをキャンセルして直前のヒストリ状態に戻す（ヒストリには積まない）"""
+    if _history and _history._undo:
+        _canvas.restore(_history._undo[-1])
+
+
 def push_history():
     if _history:
         _history.push()
