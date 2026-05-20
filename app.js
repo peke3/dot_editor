@@ -1,7 +1,7 @@
 'use strict';
 
 // ── App version ───────────────────────────────────────
-const VERSION    = '1.1.7';
+const VERSION    = '1.1.8';
 
 // ── Pyodide CDN version ───────────────────────────────
 const PYODIDE_VER = '0.26.4';
@@ -570,11 +570,18 @@ function setupUI() {
   // Share（Web Share API 対応端末のみ表示 → iOS Safari など）
   if (navigator.share) {
     $('btn-share').style.display = '';
-    $('btn-share').onclick = () => {
-      navigator.share({
-        title: 'ドット絵エディタ',
-        url: window.location.href,
-      }).catch(() => {});
+    $('btn-share').onclick = async () => {
+      if (!py) return;
+      // キャンバスを PNG に書き出して File オブジェクト化
+      const raw   = py.runPython('export_png()');
+      const bytes = (raw instanceof Uint8Array) ? raw : new Uint8Array(raw.toJs());
+      const file  = new File([bytes], 'dot_art.png', { type: 'image/png' });
+      // ファイル共有対応なら画像を、非対応なら URL を共有
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'ドット絵' }).catch(() => {});
+      } else {
+        await navigator.share({ title: 'ドット絵エディタ', url: window.location.href }).catch(() => {});
+      }
     };
   }
 
