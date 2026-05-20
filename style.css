@@ -54,19 +54,24 @@ body {
 /* ── Main ── */
 #main-content { display: flex; flex: 1; overflow: hidden; }
 
-/* ── Tool panel ── */
+/* ── Tool panel 外側（折りたたみ制御のみ） ── */
 #tool-panel {
   width: 112px; flex-shrink: 0;
+  overflow: hidden;
+  transition: width 0.22s ease;
+}
+#tool-panel.collapsed { width: 0; }
+#tool-panel.collapsed * { visibility: hidden; }
+
+/* ── Tool inner（実コンテンツ＋スクロール） ── */
+#tool-inner {
+  width: 112px;          /* 外側と同幅・固定（アニメ中もクリップされる） */
+  height: 100%;
   background: var(--panel); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 5px; padding: 8px 6px;
-  overflow: hidden;                          /* 折りたたみ時にクリップ */
-  transition: width 0.22s ease, padding 0.22s ease, border-width 0.22s ease;
+  overflow-y: auto; overflow-x: hidden;
+  box-sizing: border-box;
 }
-#tool-panel.collapsed {
-  width: 0; padding-left: 0; padding-right: 0; border-width: 0;
-}
-/* 折りたたみ中はコンテンツが透けて見えないよう幅0で非表示 */
-#tool-panel.collapsed * { visibility: hidden; }
 #tool-panel label { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
 .sep-h { height: 1px; background: var(--border); margin: 4px 0; }
 
@@ -99,6 +104,10 @@ button.active { background: var(--btn-act); border-color: var(--btn-act); color:
 
 .tool-btn { width: 100%; text-align: left; padding: 5px 6px; }
 
+/* ── ブラシ形状ボタン ── */
+.shape-btns { display: flex; gap: 4px; }
+.shape-btn  { flex: 1; padding: 4px 2px; font-size: 11px; text-align: center; }
+
 /* ── 折りたたみボタン ── */
 #btn-toggle-panel {
   font-size: 16px; padding: 4px 10px;
@@ -121,9 +130,11 @@ button.active { background: var(--btn-act); border-color: var(--btn-act); color:
   .tool-btn { padding: 10px 8px; font-size: 14px; }
   #color-btn-wrap { height: 44px; }
   #color-btn { height: 100%; }
-  /* 展開時はやや広め */
-  #tool-panel:not(.collapsed) { width: 124px; gap: 7px; }
-  #opacity-slider, #checker-slider { height: 24px; }
+  /* 展開時はやや広め（内側も合わせる） */
+  #tool-panel:not(.collapsed) { width: 128px; }
+  #tool-inner { width: 128px; gap: 7px; }
+  #opacity-slider, #checker-slider, #brush-size-slider { height: 24px; }
+  .shape-btn { padding: 8px 2px; font-size: 12px; }
   /* ステータスバーを少し高く */
   #status-bar { height: 28px; line-height: 28px; font-size: 12px; }
   /* 折りたたみボタンを大きく */

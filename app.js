@@ -1,7 +1,7 @@
 'use strict';
 
 // ── App version ───────────────────────────────────────
-const VERSION    = '1.1.2';
+const VERSION    = '1.1.4';
 
 // ── Pyodide CDN version ───────────────────────────────
 const PYODIDE_VER = '0.26.4';
@@ -26,6 +26,8 @@ let pendingFile    = null;    // file waiting for size dialog
 let touchDist      = null;    // 2本指のピンチ開始距離
 let wasMultiTouch  = false;   // 2本指操作直後フラグ（誤タップ防止）
 let checkerContrast = 20;     // チェッカー明暗差 (0=単色 〜 100=最大)
+let brushSize  = 1;           // ブラシサイズ (1〜16)
+let brushShape = 'square';    // 'square' | 'circle'
 
 // ── DOM helpers ───────────────────────────────────────
 const $  = id => document.getElementById(id);
@@ -42,11 +44,8 @@ let checkerPat = null;
 // ── Geometry helpers ──────────────────────────────────
 function pixelSize() {
   const area = $('canvas-area');
-  const base = Math.floor(Math.min(
-    area.clientWidth  / cw,
-    area.clientHeight / ch
-  ));
-  return Math.max(4, Math.floor(base * zoom));
+  const base = Math.min(area.clientWidth / cw, area.clientHeight / ch);
+  return Math.max(1, Math.floor(base * zoom));
 }
 
 function canvasOffset() {
@@ -141,12 +140,13 @@ function resizeMainCanvas() {
 function applyDraw(x, y) {
   if (!py || !inBounds(x, y)) return false;
   const { r, g, b, a } = drawColor;
+  const s = brushSize, sh = `'${brushShape}'`;
   if (activeTool === 'pen') {
-    py.runPython(`set_pixel(${x},${y},${r},${g},${b},${a})`);
+    py.runPython(`draw_dot(${x},${y},${s},${sh},${r},${g},${b},${a})`);
     return true;
   }
   if (activeTool === 'eraser') {
-    py.runPython(`erase_pixel(${x},${y},${a})`);
+    py.runPython(`erase_dot(${x},${y},${s},${sh},${a})`);
     return true;
   }
   return false;
@@ -157,12 +157,13 @@ function applyLineTo(x, y) {
   if (!py || !lastDot || !inBounds(x, y)) return false;
   if (lastDot.x === x && lastDot.y === y) return false;
   const { r, g, b, a } = drawColor;
+  const s = brushSize, sh = `'${brushShape}'`;
   if (activeTool === 'pen') {
-    py.runPython(`draw_line(${lastDot.x},${lastDot.y},${x},${y},${r},${g},${b},${a})`);
+    py.runPython(`draw_brush_line(${lastDot.x},${lastDot.y},${x},${y},${s},${sh},${r},${g},${b},${a})`);
     return true;
   }
   if (activeTool === 'eraser') {
-    py.runPython(`erase_line(${lastDot.x},${lastDot.y},${x},${y},${a})`);
+    py.runPython(`erase_brush_line(${lastDot.x},${lastDot.y},${x},${y},${s},${sh},${a})`);
     return true;
   }
   return false;
@@ -320,7 +321,7 @@ function setupCanvas() {
   // Ctrl+wheel → zoom（最大32倍）
   mainCanvas.addEventListener('wheel', e => {
     if (!e.ctrlKey) return;
-    zoom = Math.max(0.5, Math.min(32.0, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+    zoom = Math.max(0.25, Math.min(32.0, zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
     render(); e.preventDefault();
   }, { passive: false });
 
@@ -393,7 +394,7 @@ function setupCanvas() {
       // ピンチズーム（最大32倍）
       const d = touchDist2(e.touches[0], e.touches[1]);
       if (touchDist) {
-        zoom = Math.max(0.5, Math.min(32.0, zoom * (d / touchDist)));
+        zoom = Math.max(0.25, Math.min(32.0, zoom * (d / touchDist)));
         touchDist = d;
       }
       render();
@@ -486,6 +487,29 @@ function setupUI() {
     render();
   };
   $('btn-zoom-reset').onclick = () => { zoom = 1.0; panX = panY = 0; render(); };
+
+  // Fit button（画面にフィット）
+  $('btn-fit').onclick = () => { zoom = 1.0; panX = panY = 0; render(); };
+
+  // Brush size slider
+  $('brush-size-slider').value = brushSize;
+  $('brush-size-value').textContent = brushSize;
+  $('brush-size-slider').addEventListener('input', e => {
+    brushSize = parseInt(e.target.value);
+    $('brush-size-value').textContent = brushSize;
+  });
+
+  // Brush shape buttons
+  $('shape-square').onclick = () => {
+    brushShape = 'square';
+    $('shape-square').classList.add('active');
+    $('shape-circle').classList.remove('active');
+  };
+  $('shape-circle').onclick = () => {
+    brushShape = 'circle';
+    $('shape-circle').classList.add('active');
+    $('shape-square').classList.remove('active');
+  };
 
   // Undo / Redo
   $('btn-undo').onclick = doUndo;

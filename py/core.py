@@ -124,6 +124,84 @@ def erase_pixel(x, y, amount):
     _canvas.set_pixel(int(x), int(y), r, g, b, max(0, a - int(amount)))
 
 
+def _brush_offsets(size, shape):
+    """ブラシ形状のオフセット一覧を返す（キャッシュなし・小サイズ前提）"""
+    half = size // 2
+    r2   = (size / 2) ** 2
+    offsets = []
+    for dy in range(-half, half + 1):
+        for dx in range(-half, half + 1):
+            if shape == 'circle' and dx * dx + dy * dy > r2:
+                continue
+            offsets.append((dx, dy))
+    return offsets
+
+
+def draw_dot(cx, cy, size, shape, r, g, b, a):
+    """ブラシ1スタンプ描画"""
+    if _canvas is None:
+        return
+    cx, cy, r, g, b, a = int(cx), int(cy), int(r), int(g), int(b), int(a)
+    for dx, dy in _brush_offsets(int(size), str(shape)):
+        _canvas.set_pixel(cx + dx, cy + dy, r, g, b, a)
+
+
+def erase_dot(cx, cy, size, shape, amount):
+    """ブラシ1スタンプ消しゴム"""
+    if _canvas is None:
+        return
+    cx, cy, amount = int(cx), int(cy), int(amount)
+    for dx, dy in _brush_offsets(int(size), str(shape)):
+        cr, cg, cb, ca = _canvas.get_pixel(cx + dx, cy + dy)
+        _canvas.set_pixel(cx + dx, cy + dy, cr, cg, cb, max(0, ca - amount))
+
+
+def draw_brush_line(x0, y0, x1, y1, size, shape, r, g, b, a):
+    """ブレゼンハム線分 × ブラシスタンプ（ペン）"""
+    if _canvas is None:
+        return
+    offsets = _brush_offsets(int(size), str(shape))
+    x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
+    r, g, b, a = int(r), int(g), int(b), int(a)
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx - dy
+    while True:
+        for ox, oy in offsets:
+            _canvas.set_pixel(x0 + ox, y0 + oy, r, g, b, a)
+        if x0 == x1 and y0 == y1:
+            break
+        e2 = err * 2
+        if e2 > -dy:
+            err -= dy; x0 += sx
+        if e2 < dx:
+            err += dx; y0 += sy
+
+
+def erase_brush_line(x0, y0, x1, y1, size, shape, amount):
+    """ブレゼンハム線分 × ブラシスタンプ（消しゴム）"""
+    if _canvas is None:
+        return
+    offsets = _brush_offsets(int(size), str(shape))
+    x0, y0, x1, y1, amount = int(x0), int(y0), int(x1), int(y1), int(amount)
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx - dy
+    while True:
+        for ox, oy in offsets:
+            cr, cg, cb, ca = _canvas.get_pixel(x0 + ox, y0 + oy)
+            _canvas.set_pixel(x0 + ox, y0 + oy, cr, cg, cb, max(0, ca - amount))
+        if x0 == x1 and y0 == y1:
+            break
+        e2 = err * 2
+        if e2 > -dy:
+            err -= dy; x0 += sx
+        if e2 < dx:
+            err += dx; y0 += sy
+
+
 def draw_line(x0, y0, x1, y1, r, g, b, a):
     """ブレゼンハムの線分アルゴリズムでペン描画"""
     if _canvas is None:

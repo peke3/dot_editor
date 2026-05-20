@@ -30,42 +30,58 @@
     <div class="sep"></div>
     <button id="btn-undo">↩ 元に戻す</button>
     <button id="btn-redo">↪ やり直す</button>
+    <div class="sep"></div>
+    <button id="btn-fit" title="画面にフィット">⊡ フィット</button>
   </div>
 
   <!-- Main content -->
   <div id="main-content">
 
-    <!-- Tool panel -->
+    <!-- Tool panel（外側: 折りたたみ制御 / 内側: スクロール） -->
     <div id="tool-panel">
-      <button class="tool-btn active" id="tool-pen">✏️ ペン</button>
-      <button class="tool-btn" id="tool-eraser">🧹 消しゴム</button>
-      <button class="tool-btn" id="tool-eyedropper">💧 スポイト</button>
+      <div id="tool-inner">
+        <button class="tool-btn active" id="tool-pen">✏️ ペン</button>
+        <button class="tool-btn" id="tool-eraser">🧹 消しゴム</button>
+        <button class="tool-btn" id="tool-eyedropper">💧 スポイト</button>
 
-      <div class="sep-h"></div>
+        <div class="sep-h"></div>
 
-      <label>描画色</label>
-      <div id="color-btn-wrap">
-        <button id="color-btn"></button>
-        <input type="color" id="color-input" value="#000000">
+        <label>描画色</label>
+        <div id="color-btn-wrap">
+          <button id="color-btn"></button>
+          <input type="color" id="color-input" value="#000000">
+        </div>
+
+        <label>不透明度</label>
+        <input type="range" id="opacity-slider" min="0" max="255" value="255">
+        <span id="opacity-value">255</span>
+
+        <div class="sep-h"></div>
+
+        <label>ブラシサイズ</label>
+        <input type="range" id="brush-size-slider" min="1" max="16" value="1">
+        <span id="brush-size-value">1</span>
+
+        <label>ブラシ形状</label>
+        <div class="shape-btns">
+          <button id="shape-square" class="shape-btn active">■ 矩形</button>
+          <button id="shape-circle" class="shape-btn">● 円形</button>
+        </div>
+
+        <div class="sep-h"></div>
+
+        <button id="btn-grid" class="toggle-btn active">グリッド ON</button>
+        <button id="btn-zoom-reset">ズームリセット</button>
+
+        <div class="sep-h"></div>
+
+        <label>格子の濃さ</label>
+        <input type="range" id="checker-slider" min="0" max="100" value="20">
+        <span id="checker-value">20</span>
+
+        <div class="panel-spacer"></div>
+        <span id="version-label" class="version-label"></span>
       </div>
-
-      <label>不透明度</label>
-      <input type="range" id="opacity-slider" min="0" max="255" value="255">
-      <span id="opacity-value">255</span>
-
-      <div class="sep-h"></div>
-
-      <button id="btn-grid" class="toggle-btn active">グリッド ON</button>
-      <button id="btn-zoom-reset">ズームリセット</button>
-
-      <div class="sep-h"></div>
-
-      <label>格子の濃さ</label>
-      <input type="range" id="checker-slider" min="0" max="100" value="20">
-      <span id="checker-value">20</span>
-
-      <div class="panel-spacer"></div>
-      <span id="version-label" class="version-label"></span>
     </div>
 
     <!-- Canvas -->
